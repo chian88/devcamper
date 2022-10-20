@@ -11,23 +11,17 @@ const asyncHandler = require('../middleware/async');
 // @route GET /api/v1/bootcamps/:bootcampId/courses
 // @access Public
 exports.getCourses = asyncHandler(async (req, res, next) => {
-  let query;
-
   if (req.params.bootcampId) {
-    query = Course.find({ bootcamp: req.params.bootcampId });
-  } else {
-    query = Course.find().populate({
-      path: 'bootcamp',
-      select: 'name description'
-    });
-  }
+    const courses = await Course.find({ bootcamp: req.params.bootcampId });
 
-  const courses = await query;
-  res.status(200).json({
-    success: true,
-    count: courses.length,
-    data: courses
-  })
+    return res.status(200).json({
+      success: true,
+      count: courses.length,
+      data: courses
+    });
+  } else {
+    res.status(200).json(res.advancedResults);
+  }
 });
 
 
@@ -55,6 +49,7 @@ exports.getCourse = asyncHandler(async (req, res, next) => {
 // @access Private
 exports.addCourse = asyncHandler(async (req, res, next) => {
   req.body.bootcamp = req.params.bootcampId;
+  req.body.user = req.user.id;
 
 
   const bootcamp = await Bootcamp.findById(req.params.bootcampId);
@@ -63,6 +58,10 @@ exports.addCourse = asyncHandler(async (req, res, next) => {
     return next(
       new ErrorResponse('No bootcamp with id ' + req.params.bootcampId), 404
     );
+  }
+
+  if (bootcamp.user.toString() !== req.user.id && req.user.role !== 'admin') {
+    return next(new ErrorResponse(`User with id ${req.user.id} not authorized to add course to this bootcamp with id ${bootcamp._id}`, 401));
   }
 
   const course = await Course.create(req.body);
@@ -85,6 +84,11 @@ exports.updateCourse = asyncHandler(async (req, res, next) => {
       new ErrorResponse('No course with id ' + req.params.id), 404
     );
   }
+
+  if (course.user.toString() !== req.user.id && req.user.role !== 'admin') {
+    return next(new ErrorResponse(`User with id ${req.user.id} not authorized to update course ${course._id}`, 401));
+  }
+
   course = await Course.findByIdAndUpdate(req.params.id, req.body, {
     new: true,
     runValidators: true
@@ -107,6 +111,11 @@ exports.deleteCourse = asyncHandler(async (req, res, next) => {
       new ErrorResponse('No course with id ' + req.params.id), 404
     );
   }
+
+  if (course.user.toString() !== req.user.id && req.user.role !== 'admin') {
+    return next(new ErrorResponse(`User with id ${req.user.id} not authorized to delete course ${course._id}`, 401));
+  }
+
   await course.remove();
 
   res.status(200).json({
